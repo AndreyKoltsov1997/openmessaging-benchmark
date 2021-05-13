@@ -85,6 +85,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 transaction.commit();
                 txnTime = System.currentTimeMillis() - txnTime;
                 log.info("Transaction ID COMMITING {} duration {} status {}", transaction.getTxnId(), txnTime, transaction.checkStatus());
+                txnTime =  System.currentTimeMillis();
 
                 while(transaction.checkStatus() != Transaction.Status.COMMITTED) {
                     Thread.sleep(20);
