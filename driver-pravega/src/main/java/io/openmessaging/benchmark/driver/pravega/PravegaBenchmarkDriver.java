@@ -76,7 +76,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         this.registry.add(prometheusRegistry);
 
         try {
-            HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+            HttpServer server = HttpServer.create(new InetSocketAddress(8181), 0);
             server.createContext("/prometheus", httpExchange -> {
                 String response = prometheusRegistry.scrape();
                 httpExchange.sendResponseHeaders(200, response.getBytes().length);
