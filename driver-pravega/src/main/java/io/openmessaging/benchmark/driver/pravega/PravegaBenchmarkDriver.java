@@ -60,6 +60,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private PravegaConfig config;
     private ClientConfig clientConfig;
     CompositeMeterRegistry registry = new CompositeMeterRegistry();
+    PrometheusMeterRegistry prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
     private Timer transactionCommitting;
     private Timer transactionCommitted;
     private String scopeName;
@@ -71,7 +72,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         config = readConfig(configurationFile);
-        PrometheusMeterRegistry prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+        this.transactionCommitting = this.prometheusRegistry.timer("transaction.committing.duration");
+        this.transactionCommitted = this.prometheusRegistry.timer("transaction.committed.duration");
 
         this.registry.add(prometheusRegistry);
 
@@ -90,8 +93,6 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             throw new RuntimeException(e);
         }
 
-        this.transactionCommitting = this.registry.timer("transaction.committing.duration");
-        this.transactionCommitted = this.registry.timer("transaction.committed.duration");
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
 
         clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).build();
