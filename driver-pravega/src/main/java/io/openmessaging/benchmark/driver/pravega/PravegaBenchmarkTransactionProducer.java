@@ -84,14 +84,14 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 eventCount = 0;
                 transaction.commit();
                 txnTime = System.currentTimeMillis() - txnTime;
-                log.info("Transaction ID COMMITING {} duration {} status {}", transaction.getTxnId(), txnTime, transaction.checkStatus());
+                log.info("Transaction-ID-COMMITING-{}-duration-{}-status-{}", transaction.getTxnId(), txnTime, transaction.checkStatus());
                 txnTime =  System.currentTimeMillis();
 
                 while(transaction.checkStatus() != Transaction.Status.COMMITTED) {
                     Thread.sleep(20);
                 }
                 txnTime = System.currentTimeMillis() - txnTime;
-                log.info("Transaction ID COMMITED {} duration {} status {}", transaction.getTxnId(), txnTime, transaction.checkStatus());
+                log.info("Transaction-ID-COMMITED-{}-duration-{}-status-{}", transaction.getTxnId(), txnTime, transaction.checkStatus());
                 transaction = null;
             }
         } catch (TxnFailedException | InterruptedException e) {
