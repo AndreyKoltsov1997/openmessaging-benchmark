@@ -28,11 +28,13 @@ import io.pravega.client.stream.TxnFailedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
+import io.micrometer.core.instrument.Timer;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkProducer.class);
@@ -45,13 +47,17 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     @GuardedBy("this")
     private Transaction<ByteBuffer> transaction;
     private long txnTime;
+    private  Timer transactionCommittingTimer;
+    private Timer transactionCommittedTimer;
     private final int eventsPerTransaction;
     private int eventCount = 0;
     private ByteBuffer timestampAndPayload;
 
     public PravegaBenchmarkTransactionProducer(String streamName, EventStreamClientFactory clientFactory,
-            boolean includeTimestampInEvent, boolean enableConnectionPooling, int eventsPerTransaction) {
+                                               boolean includeTimestampInEvent, boolean enableConnectionPooling, int eventsPerTransaction, Timer transactionCommiting, Timer transactionCommittedTimer) {
         log.info("PravegaBenchmarkProducer: BEGIN: streamName={}", streamName);
+        this.transactionCommittingTimer = transactionCommiting;
+        this.transactionCommittedTimer = transactionCommittedTimer;
         txnTime = (long) 0.0;
 
         final String writerId = UUID.randomUUID().toString();
@@ -84,17 +90,22 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 eventCount = 0;
                 transaction.commit();
                 txnTime = System.currentTimeMillis() - txnTime;
-                log.info("Transaction-ID-COMMITING-{}-duration-{}-status-{}", transaction.getTxnId(), txnTime, transaction.checkStatus());
-                txnTime =  System.currentTimeMillis();
+                // 1. Record OPEN <-> COMMITING
+                transactionCommittingTimer.record(txnTime, TimeUnit.MILLISECONDS);
 
-                while(transaction.checkStatus() != Transaction.Status.COMMITTED) {
-                    Thread.sleep(20);
-                }
-                txnTime = System.currentTimeMillis() - txnTime;
-                log.info("Transaction-ID-COMMITED-{}-duration-{}-status-{}", transaction.getTxnId(), txnTime, transaction.checkStatus());
+                // 2. Record COMMITING <-> COMMITED
+                transactionCommittedTimer.record(() -> {
+                    while(transaction.checkStatus() != Transaction.Status.COMMITTED) {
+                        try {
+                            Thread.sleep(10);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
                 transaction = null;
             }
-        } catch (TxnFailedException | InterruptedException e) {
+        } catch (TxnFailedException e) {
             throw new RuntimeException("Transaction Write data failed ", e);
         }
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);

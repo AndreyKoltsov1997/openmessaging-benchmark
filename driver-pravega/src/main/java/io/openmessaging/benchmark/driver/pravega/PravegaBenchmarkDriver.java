@@ -22,6 +22,11 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -51,6 +56,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     private PravegaConfig config;
     private ClientConfig clientConfig;
+    CompositeMeterRegistry registry = new CompositeMeterRegistry();
+    private Timer transactionCommitting;
+    private Timer transactionCommitted;
     private String scopeName;
     private StreamManager streamManager;
     private ReaderGroupManager readerGroupManager;
@@ -60,6 +68,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         config = readConfig(configurationFile);
+        this.registry.add(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
+        this.transactionCommitting = this.registry.timer("transaction.committing.duration");
+        this.transactionCommitted = this.registry.timer("transaction.committed.duration");
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
 
         clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).build();
@@ -118,7 +129,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         BenchmarkProducer producer = null;
         if (config.enableTransaction) {
             producer = new PravegaBenchmarkTransactionProducer(topic, clientFactory, config.includeTimestampInEvent,
-                    config.writer.enableConnectionPooling, config.eventsPerTransaction);
+                    config.writer.enableConnectionPooling, config.eventsPerTransaction, transactionCommitting, transactionCommitted);
         } else {
             producer = new PravegaBenchmarkProducer(topic, clientFactory, config.includeTimestampInEvent,
                     config.writer.enableConnectionPooling);
