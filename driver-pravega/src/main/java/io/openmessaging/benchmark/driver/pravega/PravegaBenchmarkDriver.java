@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
+import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
@@ -44,6 +45,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +71,25 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         config = readConfig(configurationFile);
-        this.registry.add(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
+        PrometheusMeterRegistry prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+        this.registry.add(prometheusRegistry);
+
+        try {
+            HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+            server.createContext("/prometheus", httpExchange -> {
+                String response = prometheusRegistry.scrape();
+                httpExchange.sendResponseHeaders(200, response.getBytes().length);
+                try (OutputStream os = httpExchange.getResponseBody()) {
+                    os.write(response.getBytes());
+                }
+            });
+
+            new Thread(server::start).start();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
         this.transactionCommitting = this.registry.timer("transaction.committing.duration");
         this.transactionCommitted = this.registry.timer("transaction.committed.duration");
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
