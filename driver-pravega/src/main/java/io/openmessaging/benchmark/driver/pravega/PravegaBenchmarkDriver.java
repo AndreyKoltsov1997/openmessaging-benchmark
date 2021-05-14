@@ -39,6 +39,7 @@ import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.StreamConfiguration;
+import jdk.internal.org.jline.utils.Log;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,7 +61,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private PravegaConfig config;
     private ClientConfig clientConfig;
     CompositeMeterRegistry registry = new CompositeMeterRegistry();
-    PrometheusMeterRegistry prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+    PrometheusMeterRegistry prometheusRegistry;
     private Timer transactionCommitting;
     private Timer transactionCommitted;
     private String scopeName;
@@ -72,6 +73,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         config = readConfig(configurationFile);
+        this.prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
         this.transactionCommitting = this.prometheusRegistry.timer("transaction.committing.duration");
         this.transactionCommitted = this.prometheusRegistry.timer("transaction.committed.duration");
@@ -82,8 +84,10 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             HttpServer server = HttpServer.create(new InetSocketAddress(8181), 0);
             server.createContext("/prometheus", httpExchange -> {
                 String response = prometheusRegistry.scrape();
+                Log.info("Prometheus reponse should be "+ response);
                 httpExchange.sendResponseHeaders(200, response.getBytes().length);
                 try (OutputStream os = httpExchange.getResponseBody()) {
+                    log.info("OS GET BYTES CALLED");
                     os.write(response.getBytes());
                 }
             });

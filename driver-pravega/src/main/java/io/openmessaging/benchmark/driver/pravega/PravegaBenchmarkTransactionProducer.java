@@ -47,7 +47,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     @GuardedBy("this")
     private Transaction<ByteBuffer> transaction;
     private long txnTime;
-    private  Timer transactionCommittingTimer;
+    private Timer transactionCommittingTimer;
     private Timer transactionCommittedTimer;
     private final int eventsPerTransaction;
     private int eventCount = 0;
