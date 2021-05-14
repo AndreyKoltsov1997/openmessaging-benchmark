@@ -83,6 +83,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
                 .register(prometheusRegistry);
 
         try {
+            log.info("Starting up HTTP server...");
             HttpServer server = HttpServer.create(new InetSocketAddress(8181), 0);
             server.createContext("/prometheus", httpExchange -> {
                 String response = prometheusRegistry.scrape();
@@ -98,6 +99,8 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        log.info("HTTP server had started up...");
+
 
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
 
