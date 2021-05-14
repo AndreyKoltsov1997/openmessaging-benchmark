@@ -75,8 +75,13 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         config = readConfig(configurationFile);
         this.prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
-        this.transactionCommitting = this.prometheusRegistry.timer("transaction.committing.duration");
-        this.transactionCommitted = this.prometheusRegistry.timer("transaction.committed.duration");
+        this.transactionCommitting = Timer.builder("commiting")
+                .publishPercentiles(0.5, 0.95)
+                .register(prometheusRegistry);
+
+        this.transactionCommitted = Timer.builder("committed")
+                .publishPercentiles(0.5, 0.95)
+                .register(prometheusRegistry);
 
         this.registry.add(prometheusRegistry);
 
