@@ -94,6 +94,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 transactionCommittingTimer.record(txnTime, TimeUnit.MILLISECONDS);
 
                 // 2. Record COMMITING <-> COMMITED
+                log.info("Recording COMMITED transfter ...g");
                 transactionCommittedTimer.record(() -> {
                     while(transaction.checkStatus() != Transaction.Status.COMMITTED) {
                         try {
