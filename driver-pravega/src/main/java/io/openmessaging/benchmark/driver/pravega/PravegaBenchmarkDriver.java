@@ -60,7 +60,6 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     private PravegaConfig config;
     private ClientConfig clientConfig;
-    CompositeMeterRegistry registry = new CompositeMeterRegistry();
     PrometheusMeterRegistry prometheusRegistry;
     private Timer transactionCommitting;
     private Timer transactionCommitted;
@@ -82,8 +81,6 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         this.transactionCommitted = Timer.builder("committed")
                 .publishPercentiles(0.5, 0.95)
                 .register(prometheusRegistry);
-
-        this.registry.add(prometheusRegistry);
 
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(8181), 0);
