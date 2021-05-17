@@ -22,6 +22,12 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
+import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -33,12 +39,15 @@ import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.StreamConfiguration;
+import jdk.internal.org.jline.utils.Log;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +60,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     private PravegaConfig config;
     private ClientConfig clientConfig;
+    private PrometheusMeterRegistry prometheusRegistry;
+    private Timer transactionCommitting;
+    private Timer transactionCommitted;
     private String scopeName;
     private StreamManager streamManager;
     private ReaderGroupManager readerGroupManager;
@@ -60,6 +72,36 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         config = readConfig(configurationFile);
+        this.prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+
+        this.transactionCommitting = Timer.builder("commiting")
+                .publishPercentiles(0.5, 0.95)
+                .register(prometheusRegistry);
+
+        this.transactionCommitted = Timer.builder("committed")
+                .publishPercentiles(0.5, 0.95)
+                .register(prometheusRegistry);
+
+        try {
+            log.info("Starting up HTTP server...");
+            HttpServer server = HttpServer.create(new InetSocketAddress(8181), 0);
+            server.createContext("/prometheus", httpExchange -> {
+                String response = prometheusRegistry.scrape();
+                Log.info("Prometheus response should be "+ response);
+                httpExchange.sendResponseHeaders(200, response.getBytes().length);
+                try (OutputStream os = httpExchange.getResponseBody()) {
+                    log.info("OS GET BYTES CALLED");
+                    os.write(response.getBytes());
+                }
+            });
+
+            new Thread(server::start).start();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        log.info("HTTP server had started up...");
+
+
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
 
         clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).build();
@@ -118,7 +160,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         BenchmarkProducer producer = null;
         if (config.enableTransaction) {
             producer = new PravegaBenchmarkTransactionProducer(topic, clientFactory, config.includeTimestampInEvent,
-                    config.writer.enableConnectionPooling, config.eventsPerTransaction);
+                    config.writer.enableConnectionPooling, config.eventsPerTransaction, transactionCommitting, transactionCommitted);
         } else {
             producer = new PravegaBenchmarkProducer(topic, clientFactory, config.includeTimestampInEvent,
                     config.writer.enableConnectionPooling);
