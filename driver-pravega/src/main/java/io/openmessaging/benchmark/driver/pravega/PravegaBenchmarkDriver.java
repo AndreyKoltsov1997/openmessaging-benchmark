@@ -60,7 +60,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     private PravegaConfig config;
     private ClientConfig clientConfig;
-    PrometheusMeterRegistry prometheusRegistry;
+    private PrometheusMeterRegistry prometheusRegistry;
     private Timer transactionCommitting;
     private Timer transactionCommitted;
     private String scopeName;
@@ -87,7 +87,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             HttpServer server = HttpServer.create(new InetSocketAddress(8181), 0);
             server.createContext("/prometheus", httpExchange -> {
                 String response = prometheusRegistry.scrape();
-                Log.info("Prometheus reponse should be "+ response);
+                Log.info("Prometheus response should be "+ response);
                 httpExchange.sendResponseHeaders(200, response.getBytes().length);
                 try (OutputStream os = httpExchange.getResponseBody()) {
                     log.info("OS GET BYTES CALLED");
