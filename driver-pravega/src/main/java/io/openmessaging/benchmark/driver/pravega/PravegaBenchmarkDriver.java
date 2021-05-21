@@ -41,8 +41,11 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkDriver.class);
@@ -52,15 +55,18 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private PravegaConfig config;
     private ClientConfig clientConfig;
     private String scopeName;
+
     private StreamManager streamManager;
     private ReaderGroupManager readerGroupManager;
     private EventStreamClientFactory clientFactory;
     private final List<String> createdTopics = new ArrayList<>();
+    private ConcurrentHashMap<String, List> txnsWithEvents;
 
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         config = readConfig(configurationFile);
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
+        this.txnsWithEvents = new ConcurrentHashMap<>();
 
         clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).build();
         scopeName = config.client.scopeName;
@@ -132,7 +138,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         topic = cleanName(topic);
         subscriptionName = cleanName(subscriptionName);
         BenchmarkConsumer consumer = new PravegaBenchmarkConsumer(topic, scopeName, subscriptionName, consumerCallback,
-                clientFactory, readerGroupManager, config.includeTimestampInEvent);
+                clientFactory, readerGroupManager, config.includeTimestampInEvent, this.txnsWithEvents);
         return CompletableFuture.completedFuture(consumer);
     }
 
