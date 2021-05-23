@@ -101,7 +101,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
 
                 final long commitProcessOnly = (commitFinishedEpoch - commitProcessStartEpoch) / (long) 1000000;
 
-                log.info("Transaction---" + transaction.getTxnId() + "---OPEN---" + this.stateChangedOpenMs +
+                log.debug("Transaction---" + transaction.getTxnId() + "---OPEN---" + this.stateChangedOpenMs +
                         "---COMMITTING---" + this.stateChangedCommittingMs + "---COMMITTED---" +
                         this.statedChangedCommittedMs + "---EPOCH---" + System.currentTimeMillis() + "---COMMITONLY---" + commitProcessOnly);
                 transaction = null;
