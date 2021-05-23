@@ -47,6 +47,10 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     private final int eventsPerTransaction;
     private int eventCount = 0;
     private ByteBuffer timestampAndPayload;
+    // -- Additional measurements
+    private long stateChangedOpenMs;
+    private long stateChangedCommittingMs;
+    private long statedChangedCommittedMs;
 
     public PravegaBenchmarkTransactionProducer(String streamName, EventStreamClientFactory clientFactory,
             boolean includeTimestampInEvent, boolean enableConnectionPooling, int eventsPerTransaction) {
@@ -64,7 +68,13 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
         try {
             if (transaction == null) {
+                final long txnBeginEpoch = System.nanoTime();
                 transaction = transactionWriter.beginTxn();
+                // beginTxn() is Synchronous => do not wait for status OPEN implicitly
+                final long stateChangedOpenEpoch = System.nanoTime();
+                this.stateChangedOpenMs = (stateChangedOpenEpoch - txnBeginEpoch) / (long) 1000000;
+                // Start timer for OPEN <-> COMMITTING
+                this.stateChangedCommittingMs = stateChangedOpenEpoch;
             }
             if (includeTimestampInEvent) {
                 if (timestampAndPayload == null || timestampAndPayload.limit() != Long.BYTES + payload.length) {
@@ -79,7 +89,21 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             }
             if (++eventCount >= eventsPerTransaction) {
                 eventCount = 0;
+                final long commitProcessStartEpoch = System.nanoTime();
                 transaction.commit();
+                final long commitFinishedEpoch = System.nanoTime();
+                final long committedStatusReceivedEpoch = this.getTimeStatusReached(transaction, Transaction.Status.COMMITTED);
+
+                // Measure OPEN<->COMMITTING
+                this.stateChangedCommittingMs = (commitFinishedEpoch - this.stateChangedCommittingMs) / (long) 1000000;
+                // Measure COMMITTING <-> COMMITTED in milliseconds
+                this.statedChangedCommittedMs = (committedStatusReceivedEpoch - commitFinishedEpoch) / (long) 1000000;
+
+                final long commitProcessOnly = (commitFinishedEpoch - commitProcessStartEpoch) / (long) 1000000;
+
+                log.debug("Transaction---" + transaction.getTxnId() + "---OPEN---" + this.stateChangedOpenMs +
+                        "---COMMITTING---" + this.stateChangedCommittingMs + "---COMMITTED---" +
+                        this.statedChangedCommittedMs + "---EPOCH---" + System.currentTimeMillis() + "---COMMITONLY---" + commitProcessOnly);
                 transaction = null;
             }
         } catch (TxnFailedException e) {
@@ -106,5 +130,21 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             }
         }
         transactionWriter.close();
+    }
+
+    /**
+     * Ensures @param transaction reached given @param status
+     * @return system time when given status had been reached.
+     */
+    private long getTimeStatusReached(Transaction transaction, Transaction.Status status) {
+        while(transaction.checkStatus() != status) {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                return 0;
+            }
+        }
+        return System.nanoTime();
     }
 }
