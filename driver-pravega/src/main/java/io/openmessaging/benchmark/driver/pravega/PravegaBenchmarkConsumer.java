@@ -32,7 +32,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -45,9 +47,12 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
     private final EventStreamReader<ByteBuffer> reader;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
+    private ConcurrentHashMap<String, List> txnsWithEvents;
+
     public PravegaBenchmarkConsumer(String streamName, String scopeName, String subscriptionName, ConsumerCallback consumerCallback,
                                     EventStreamClientFactory clientFactory, ReaderGroupManager readerGroupManager,
-                                    boolean includeTimestampInEvent) {
+                                    boolean includeTimestampInEvent, ConcurrentHashMap txnsWithEvents) {
+        this.txnsWithEvents = txnsWithEvents;
         log.info("PravegaBenchmarkConsumer: BEGIN: subscriptionName={}, streamName={}", subscriptionName, streamName);
         // Create reader group if it doesn't already exist.
         final ReaderGroupConfig readerGroupConfig = ReaderGroupConfig.builder()
@@ -75,6 +80,16 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                            eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
                        }
                        byte[] payload = new byte[event.remaining()];
+                       final String payloadStr = new String(payload, StandardCharsets.UTF_8);
+                       List readEventsInTxn = this.txnsWithEvents.putIfAbsent(payloadStr, Arrays.asList(payloadStr));
+                       if (readEventsInTxn != null) {
+                           readEventsInTxn.add(eventTimestamp); // TODO: add delta t2-t1
+                           if (readEventsInTxn.size() == 1000) {
+                               log.info("Transaction ID " + payloadStr + " had been populated.");
+                               // TODO: Calculate average and remove entry?
+                           }
+                       }
+                       log.info("Transaction ID read: " + payloadStr);
                        event.get(payload);
                        consumerCallback.messageReceived(payload, eventTimestamp);
                    }

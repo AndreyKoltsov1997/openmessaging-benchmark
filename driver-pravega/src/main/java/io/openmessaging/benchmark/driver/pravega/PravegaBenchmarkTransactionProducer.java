@@ -134,6 +134,8 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 // beginTxn() is Synchronous => do not wait for status OPEN implicitly
                 this.noneToOpenEndEpoch = System.nanoTime();
             }
+//            final byte[] txnIdPayload = this.convertTxnIdToByteArr(transaction.getTxnId());
+            payload = this.convertTxnIdToByteArr(transaction.getTxnId()); // TODO: Ensure payload is appended, not repalced
             if (includeTimestampInEvent) {
                 if (timestampAndPayload == null || timestampAndPayload.limit() != Long.BYTES + payload.length) {
                     timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
@@ -143,6 +145,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
                 writeEvent(key, timestampAndPayload);
             } else {
+
                 writeEvent(key, ByteBuffer.wrap(payload));
             }
             if (++eventCount >= eventsPerTransaction) {
@@ -187,6 +190,18 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             }
         }
         transactionWriter.close();
+    }
+
+    /**
+     * Transform transaction ID into byte array.
+     * @param txnId - transaction ID;
+     * @return - byte array representing transaction ID;
+     */
+    private byte[] convertTxnIdToByteArr(final UUID txnId) {
+        ByteBuffer byteBuf = ByteBuffer.wrap(new byte[16]); // 16 => binary
+        byteBuf.putLong(txnId.getMostSignificantBits());
+        byteBuf.putLong(txnId.getLeastSignificantBits());
+        return byteBuf.array();
     }
 
 }
