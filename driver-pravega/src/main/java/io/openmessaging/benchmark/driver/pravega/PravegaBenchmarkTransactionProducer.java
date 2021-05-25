@@ -154,7 +154,8 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 final long commitProcessStartEpoch = System.nanoTime();
                 transaction.commit();
                 final long commitFinishedEpoch = System.nanoTime();
-                this.executorService.submit(new PollingJob(this.noneToOpenStartEpoch, this.noneToOpenEndEpoch, commitProcessStartEpoch, commitFinishedEpoch, this.transaction));
+                this.waitUntilStatusReached(this.transaction, Transaction.Status.COMMITTED);
+                // this.executorService.submit(new PollingJob(this.noneToOpenStartEpoch, this.noneToOpenEndEpoch, commitProcessStartEpoch, commitFinishedEpoch, this.transaction));
 
                 transaction = null;
             }
@@ -196,6 +197,22 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
         byteBuf.putLong(txnId.getMostSignificantBits());
         byteBuf.putLong(txnId.getLeastSignificantBits());
         return byteBuf.array();
+    }
+
+    /**
+     * Ensures @param transaction reached given @param status
+     * @return system time when given status had been reached.
+     */
+    private long waitUntilStatusReached(Transaction transaction, Transaction.Status status) {
+        while(transaction.checkStatus() != status) {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                return 0;
+            }
+        }
+        return System.nanoTime();
     }
 
 }

@@ -81,9 +81,11 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                        }
                        byte[] payload = new byte[event.remaining()];
                        final String payloadStr = new String(payload, StandardCharsets.UTF_8);
+                       log.info("Payload is " + payloadStr);
                        List readEventsInTxn = this.txnsWithEvents.putIfAbsent(payloadStr, Arrays.asList(payloadStr));
                        if (readEventsInTxn != null) {
                            readEventsInTxn.add(eventTimestamp); // TODO: add delta t2-t1
+                           log.info("Append data into transaction");
                            if (readEventsInTxn.size() == 1000) {
                                log.info("Transaction ID " + payloadStr + " had been populated.");
                                // TODO: Calculate average and remove entry?
