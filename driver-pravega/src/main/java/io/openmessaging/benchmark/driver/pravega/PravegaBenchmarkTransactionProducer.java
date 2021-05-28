@@ -153,9 +153,18 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 eventCount = 0;
                 final long commitProcessStartEpoch = System.nanoTime();
                 transaction.commit();
-                final long commitFinishedEpoch = System.nanoTime();
-                this.waitUntilStatusReached(this.transaction, Transaction.Status.COMMITTED);
-                // this.executorService.submit(new PollingJob(this.noneToOpenStartEpoch, this.noneToOpenEndEpoch, commitProcessStartEpoch, commitFinishedEpoch, this.transaction));
+                final long commitProcessEndEpoch = System.nanoTime();
+
+                // Measure .beginTxn() duration
+                final long beginTxnDuration = (this.noneToOpenEndEpoch - this.noneToOpenStartEpoch) / (long) 1000000;
+
+                // Measure .commit() duration
+                final long commitDuration = (commitProcessEndEpoch - commitProcessStartEpoch) / (long) 1000000;
+
+                // write() duration
+                final long writeDuration = (commitProcessStartEpoch - this.noneToOpenEndEpoch) / (long) 1000000;
+                log.info("---BEGINDURATION---" + beginTxnDuration +
+                        "---COMMITTDURATION---" + commitDuration + "---WRITEDURATION---" + writeDuration);
 
                 transaction = null;
             }
