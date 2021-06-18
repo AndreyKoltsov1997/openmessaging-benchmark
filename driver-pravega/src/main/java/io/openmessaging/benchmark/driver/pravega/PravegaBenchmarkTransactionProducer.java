@@ -164,10 +164,9 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 final long writeExclusiveDurMs = (commitProcessStartEpoch - this.noneToOpenEndEpoch) / (long) 1000000;
                 final long commitExclusiveDurMs = (commitFinishedEpoch - commitProcessStartEpoch) / (long) 1000000;
                 this.txnCount++;
-                log.info("---BEGINTXN---" + beginCommitDurMs +
-                        "---WRITE---" + writeExclusiveDurMs + "---COMMITT---" +
-                        commitExclusiveDurMs + "---TXN---" + this.txnCount + "---EPOCH---" + System.currentTimeMillis());
-//                 this.executorService.submit(new PollingJob(this.noneToOpenStartEpoch, this.noneToOpenEndEpoch, commitProcessStartEpoch, commitFinishedEpoch, this.transaction));
+//                log.info("---BEGINTXN---" + beginCommitDurMs +
+//                        "---WRITE---" + writeExclusiveDurMs + "---COMMITT---" +
+//                        commitExclusiveDurMs + "---TXN---" + this.txnCount + "---EPOCH---" + System.currentTimeMillis());
 
                 transaction = null;
             }

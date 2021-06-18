@@ -67,6 +67,7 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
            while (!closed.get()) {
                try {
                    final ByteBuffer event = reader.readNextEvent(1000).getEvent();
+                   final long eventInTxnReadTs = System.nanoTime();
                    if (event != null) {
                        long eventTimestamp;
                        if (includeTimestampInEvent) {
@@ -75,6 +76,12 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                            // This will result in an invalid end-to-end latency measurement of 0 seconds.
                            eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
                        }
+                       final String test = new String(event.array(), event.arrayOffset() + event.position(), event.remaining(), StandardCharsets.UTF_16);
+                       final String[] payloadComponents = test.split("---");
+                       final String txnId = payloadComponents[0];
+                       final long txnWriteTs = Long.parseLong(payloadComponents[1]);
+                       final long readDurationMs = (eventInTxnReadTs - txnWriteTs) / (long) 1000000;
+                       log.info("Transaction " + payloadComponents[0] + "---" + readDurationMs);
                        byte[] payload = new byte[event.remaining()];
                        String payloadStr = new String(payload, StandardCharsets.UTF_16);
                        event.get(payload);
