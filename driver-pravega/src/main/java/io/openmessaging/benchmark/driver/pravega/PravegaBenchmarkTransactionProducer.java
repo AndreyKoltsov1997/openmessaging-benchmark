@@ -30,6 +30,8 @@ import org.slf4j.LoggerFactory;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.UUID;
@@ -138,13 +140,15 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             final boolean emptyTxnRequested = (eventsPerTransaction == 0);
             if (!emptyTxnRequested) {
                 if (includeTimestampInEvent) {
+                    byte[] txnIdByte = this.convertTxnIdToByteStr(transaction.getTxnId());
                     if (timestampAndPayload == null || timestampAndPayload.limit() != Long.BYTES + payload.length) {
-                        timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
+                        timestampAndPayload = ByteBuffer.allocate(Long.BYTES + txnIdByte.length);
                     } else {
                         timestampAndPayload.position(0);
                     }
-                    timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
-                    writeEvent(key, timestampAndPayload);
+//                    timestampAndPayload.putLong(System.currentTimeMillis()).put(txnIdByte).flip();
+                    ByteBuffer testPayload = ByteBuffer.wrap(txnIdByte);
+                    writeEvent(key, testPayload);
                 } else {
                     writeEvent(key, ByteBuffer.wrap(payload));
                 }
@@ -175,6 +179,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     }
 
     private void writeEvent(Optional<String> key, ByteBuffer payload) throws TxnFailedException {
+        final String test = new String(payload.array(), payload.arrayOffset() + payload.position(), payload.remaining(), StandardCharsets.UTF_16);
         if (key.isPresent()) {
             transaction.writeEvent(key.get(), payload);
         } else {
@@ -194,5 +199,23 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
         }
         transactionWriter.close();
     }
+
+    /**
+     * Transform transaction ID into byte array.
+     * @param txnId - transaction ID;
+     * @return - byte array representing transaction ID;
+     */
+    private byte[] convertTxnIdToByteArr(final UUID txnId) {
+        ByteBuffer byteBuf = ByteBuffer.wrap(new byte[16]); // 16 => binary
+        byteBuf.putLong(txnId.getMostSignificantBits());
+        byteBuf.putLong(txnId.getLeastSignificantBits());
+        return byteBuf.array();
+    }
+
+    private byte[] convertTxnIdToByteStr(final UUID txnId) {
+        final String uuidStr = UUID.randomUUID().toString().replace("-", "") + "---" + System.nanoTime();
+        return uuidStr.getBytes(StandardCharsets.UTF_16);
+    }
+
 
 }

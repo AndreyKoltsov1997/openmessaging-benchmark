@@ -62,7 +62,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         config = readConfig(configurationFile);
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
 
-        clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).build();
+        clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).validateHostName(false).build();
         scopeName = config.client.scopeName;
         streamManager = StreamManager.create(clientConfig);
         readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);

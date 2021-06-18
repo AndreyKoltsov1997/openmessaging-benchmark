@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,7 +76,9 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                            eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
                        }
                        byte[] payload = new byte[event.remaining()];
+                       String payloadStr = new String(payload, StandardCharsets.UTF_16);
                        event.get(payload);
+
                        consumerCallback.messageReceived(payload, eventTimestamp);
                    }
                } catch (ReinitializationRequiredException e) {
