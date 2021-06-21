@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -87,11 +88,18 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                        final String txnId = payloadComponents[0];
                        final long txnWriteTs = Long.parseLong(payloadComponents[1]);
                        final long readDurationMs = (eventInTxnReadTs - txnWriteTs) / (long) 1000000;
-                       List readEventsInTxn = this.txnsWithEvents.putIfAbsent(txnId, Arrays.asList(txnId));
+                       List readEventsInTxn = this.txnsWithEvents.putIfAbsent(txnId, Arrays.asList(readDurationMs));
                        if (readEventsInTxn != null) {
-                           readEventsInTxn.add(txnWriteTs); // TODO: add delta t2-t1
+                           readEventsInTxn.add(txnWriteTs);
+                           // TODO: make the value configurable
                            if (readEventsInTxn.size() == 1000) {
-                               log.info("Transaction ID " + txnWriteTs + " had been populated.");
+                               double summary = 0.0;
+                               for (Iterator<Long> i = readEventsInTxn.iterator(); i.hasNext();) {
+                                   long currentTime = i.next();
+                                   summary += currentTime;
+                               }
+                               double average = (summary) / readEventsInTxn.size();
+                               log.info("READTXN---ID---" + txnId + "---AVG---" + average);
                            }
                        }
                        log.info("Transaction " + payloadComponents[0] + "---" + readDurationMs);

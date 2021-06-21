@@ -169,7 +169,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 final long commitExclusiveDurMs = (commitFinishedEpoch - commitProcessStartEpoch) / (long) 1000000;
                 this.txnCount++;
                 this.totalAmountOfTxn.incrementAndGet();
-                this.getTimeStatusReached(this.transaction, Transaction.Status.COMMITTED);
+//                this.getTimeStatusReached(this.transaction, Transaction.Status.COMMITTED);
 //                log.info("---BEGINTXN---" + beginCommitDurMs +
 //                        "---WRITE---" + writeExclusiveDurMs + "---COMMITT---" +
 //                        commitExclusiveDurMs + "---TXN---" + this.txnCount + "---EPOCH---" + System.currentTimeMillis());
