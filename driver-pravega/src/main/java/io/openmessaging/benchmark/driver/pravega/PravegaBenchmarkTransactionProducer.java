@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkProducer.class);
@@ -53,6 +54,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     // -- Additional measurements
     private long noneToOpenStartEpoch;
     private long noneToOpenEndEpoch;
+    private AtomicInteger totalAmountOfTxn;
 
     private ExecutorService executorService;
 
@@ -116,7 +118,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     }
 
     public PravegaBenchmarkTransactionProducer(String streamName, EventStreamClientFactory clientFactory,
-            boolean includeTimestampInEvent, boolean enableConnectionPooling, int eventsPerTransaction) {
+            boolean includeTimestampInEvent, boolean enableConnectionPooling, int eventsPerTransaction, AtomicInteger totalAmountOfTxn) {
         log.info("PravegaBenchmarkProducer: BEGIN: streamName={}", streamName);
 
         final String writerId = UUID.randomUUID().toString();
@@ -126,6 +128,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 EventWriterConfig.builder().enableConnectionPooling(enableConnectionPooling).build());
         this.eventsPerTransaction = eventsPerTransaction;
         this.includeTimestampInEvent = includeTimestampInEvent;
+        this.totalAmountOfTxn = totalAmountOfTxn;
     }
 
     @Override
@@ -157,6 +160,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             if (++eventCount >= eventsPerTransaction) {
                 eventCount = 0;
                 final long commitProcessStartEpoch = System.nanoTime();
+                log.info("[TMP] Committing txn " + transaction.getTxnId());
                 transaction.commit();
                 final long commitFinishedEpoch = System.nanoTime();
                 // BegintTxn(), commit(), write()
@@ -164,6 +168,8 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 final long writeExclusiveDurMs = (commitProcessStartEpoch - this.noneToOpenEndEpoch) / (long) 1000000;
                 final long commitExclusiveDurMs = (commitFinishedEpoch - commitProcessStartEpoch) / (long) 1000000;
                 this.txnCount++;
+                this.totalAmountOfTxn.incrementAndGet();
+                this.getTimeStatusReached(this.transaction, Transaction.Status.COMMITTED);
 //                log.info("---BEGINTXN---" + beginCommitDurMs +
 //                        "---WRITE---" + writeExclusiveDurMs + "---COMMITT---" +
 //                        commitExclusiveDurMs + "---TXN---" + this.txnCount + "---EPOCH---" + System.currentTimeMillis());
@@ -212,8 +218,24 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     }
 
     private byte[] convertTxnIdToByteStr(final UUID txnId) {
-        final String uuidStr = UUID.randomUUID().toString().replace("-", "") + "---" + System.nanoTime();
+        final String uuidStr = txnId.toString().replace("-", "") + "---" + System.nanoTime();
         return uuidStr.getBytes(StandardCharsets.UTF_16);
+    }
+
+    /**
+     * Ensures @param transaction reached given @param status
+     * @return system time when given status had been reached.
+     */
+    private long getTimeStatusReached(Transaction transaction, Transaction.Status status) {
+        while(transaction.checkStatus() != status) {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                return 0;
+            }
+        }
+        return System.nanoTime();
     }
 
 

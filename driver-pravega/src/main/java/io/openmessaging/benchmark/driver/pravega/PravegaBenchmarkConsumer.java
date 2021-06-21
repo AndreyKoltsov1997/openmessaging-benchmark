@@ -33,7 +33,10 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -45,10 +48,13 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
     private final ExecutorService executor;
     private final EventStreamReader<ByteBuffer> reader;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private ConcurrentHashMap<String, List> txnsWithEvents;
+
 
     public PravegaBenchmarkConsumer(String streamName, String scopeName, String subscriptionName, ConsumerCallback consumerCallback,
                                     EventStreamClientFactory clientFactory, ReaderGroupManager readerGroupManager,
-                                    boolean includeTimestampInEvent) {
+                                    boolean includeTimestampInEvent, ConcurrentHashMap txnsWithEvents) {
+        this.txnsWithEvents = txnsWithEvents;
         log.info("PravegaBenchmarkConsumer: BEGIN: subscriptionName={}, streamName={}", subscriptionName, streamName);
         // Create reader group if it doesn't already exist.
         final ReaderGroupConfig readerGroupConfig = ReaderGroupConfig.builder()
@@ -81,6 +87,13 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                        final String txnId = payloadComponents[0];
                        final long txnWriteTs = Long.parseLong(payloadComponents[1]);
                        final long readDurationMs = (eventInTxnReadTs - txnWriteTs) / (long) 1000000;
+                       List readEventsInTxn = this.txnsWithEvents.putIfAbsent(txnId, Arrays.asList(txnId));
+                       if (readEventsInTxn != null) {
+                           readEventsInTxn.add(txnWriteTs); // TODO: add delta t2-t1
+                           if (readEventsInTxn.size() == 1000) {
+                               log.info("Transaction ID " + txnWriteTs + " had been populated.");
+                           }
+                       }
                        log.info("Transaction " + payloadComponents[0] + "---" + readDurationMs);
                        byte[] payload = new byte[event.remaining()];
                        String payloadStr = new String(payload, StandardCharsets.UTF_16);
