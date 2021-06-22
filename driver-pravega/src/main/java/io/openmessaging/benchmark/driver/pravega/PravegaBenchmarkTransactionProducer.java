@@ -127,7 +127,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 new ByteBufferSerializer(),
                 EventWriterConfig.builder().enableConnectionPooling(enableConnectionPooling).build());
         this.eventsPerTransaction = eventsPerTransaction;
-        this.includeTimestampInEvent = includeTimestampInEvent;
+        this.includeTimestampInEvent = false; //includeTimestampInEvent;
         this.totalAmountOfTxn = totalAmountOfTxn;
     }
 
@@ -142,19 +142,15 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             }
             final boolean emptyTxnRequested = (eventsPerTransaction == 0);
             if (!emptyTxnRequested) {
-                if (includeTimestampInEvent) {
-                    byte[] txnIdByte = this.convertTxnIdToByteStr(transaction.getTxnId());
-                    if (timestampAndPayload == null || timestampAndPayload.limit() != Long.BYTES + payload.length) {
-                        timestampAndPayload = ByteBuffer.allocate(Long.BYTES + txnIdByte.length);
-                    } else {
-                        timestampAndPayload.position(0);
-                    }
-//                    timestampAndPayload.putLong(System.currentTimeMillis()).put(txnIdByte).flip();
-                    ByteBuffer testPayload = ByteBuffer.wrap(txnIdByte);
-                    writeEvent(key, testPayload);
+                byte[] txnIdByte = this.convertTxnIdToByteStr(transaction.getTxnId());
+                if (timestampAndPayload == null || timestampAndPayload.limit() != Long.BYTES + payload.length) {
+                    timestampAndPayload = ByteBuffer.allocate(Long.BYTES + txnIdByte.length);
                 } else {
-                    writeEvent(key, ByteBuffer.wrap(payload));
+                    timestampAndPayload.position(0);
                 }
+//                    timestampAndPayload.putLong(System.currentTimeMillis()).put(txnIdByte).flip();
+                ByteBuffer testPayload = ByteBuffer.wrap(txnIdByte);
+                writeEvent(key, testPayload);
             }
 
             if (++eventCount >= eventsPerTransaction) {

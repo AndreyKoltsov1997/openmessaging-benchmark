@@ -67,6 +67,7 @@ public class Benchmark {
 
     public static void main(String[] args) throws Exception {
         final Arguments arguments = new Arguments();
+        System.out.println("Arguments" + arguments.toString());
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("messaging-benchmark");
 
