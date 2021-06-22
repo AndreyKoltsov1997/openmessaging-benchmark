@@ -43,6 +43,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkDriver.class);
@@ -56,17 +58,23 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private ReaderGroupManager readerGroupManager;
     private EventStreamClientFactory clientFactory;
     private final List<String> createdTopics = new ArrayList<>();
+    private ConcurrentHashMap<String, List> txnsWithEvents;
+    private AtomicInteger totalTxnAmount;
+
 
     @Override
     public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
         config = readConfig(configurationFile);
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
-
-        clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).build();
+        clientConfig = ClientConfig.builder().controllerURI(URI.create(config.client.controllerURI)).validateHostName(false).build();
         scopeName = config.client.scopeName;
         streamManager = StreamManager.create(clientConfig);
         readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);
         clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
+
+        // Initialize fields for read-after-write measurement purposes
+        this.txnsWithEvents = new ConcurrentHashMap<>();
+        this.totalTxnAmount = new AtomicInteger();
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory())
@@ -118,7 +126,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         BenchmarkProducer producer = null;
         if (config.enableTransaction) {
             producer = new PravegaBenchmarkTransactionProducer(topic, clientFactory, config.includeTimestampInEvent,
-                    config.writer.enableConnectionPooling, config.eventsPerTransaction);
+                    config.writer.enableConnectionPooling, config.eventsPerTransaction, this.totalTxnAmount);
         } else {
             producer = new PravegaBenchmarkProducer(topic, clientFactory, config.includeTimestampInEvent,
                     config.writer.enableConnectionPooling);
@@ -132,11 +140,12 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         topic = cleanName(topic);
         subscriptionName = cleanName(subscriptionName);
         BenchmarkConsumer consumer = new PravegaBenchmarkConsumer(topic, scopeName, subscriptionName, consumerCallback,
-                clientFactory, readerGroupManager, config.includeTimestampInEvent);
+                clientFactory, readerGroupManager, config.includeTimestampInEvent, this.txnsWithEvents);
         return CompletableFuture.completedFuture(consumer);
     }
 
     private void deleteTopics() {
+        log.info("---CREATED-AMM-OF-TXN-FROM-ALL-PRODUCERS---" + this.totalTxnAmount.get());
         synchronized (createdTopics) {
             for (String topic : createdTopics) {
                 log.info("deleteTopics: topic={}", topic);

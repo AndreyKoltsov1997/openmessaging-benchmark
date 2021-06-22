@@ -32,7 +32,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -44,10 +46,13 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
     private final ExecutorService executor;
     private final EventStreamReader<ByteBuffer> reader;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private ConcurrentHashMap<String, List<Long>> txnsWithEvents;
+
 
     public PravegaBenchmarkConsumer(String streamName, String scopeName, String subscriptionName, ConsumerCallback consumerCallback,
                                     EventStreamClientFactory clientFactory, ReaderGroupManager readerGroupManager,
-                                    boolean includeTimestampInEvent) {
+                                    boolean includeTimestampInEvent, ConcurrentHashMap txnsWithEvents) {
+        this.txnsWithEvents = txnsWithEvents;
         log.info("PravegaBenchmarkConsumer: BEGIN: subscriptionName={}, streamName={}", subscriptionName, streamName);
         // Create reader group if it doesn't already exist.
         final ReaderGroupConfig readerGroupConfig = ReaderGroupConfig.builder()
@@ -66,16 +71,60 @@ public class PravegaBenchmarkConsumer implements BenchmarkConsumer {
            while (!closed.get()) {
                try {
                    final ByteBuffer event = reader.readNextEvent(1000).getEvent();
+                   final long eventInTxnReadTs = System.nanoTime();
                    if (event != null) {
-                       long eventTimestamp;
-                       if (includeTimestampInEvent) {
-                           eventTimestamp = event.getLong();
-                       } else {
-                           // This will result in an invalid end-to-end latency measurement of 0 seconds.
-                           eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
+                       long eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);;
+//                       if (includeTimestampInEvent) {
+//                           eventTimestamp = event.getLong();
+//                       } else {
+//                           // This will result in an invalid end-to-end latency measurement of 0 seconds.
+//                           eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
+//                       }
+                       final String test = new String(event.array(), event.arrayOffset() + event.position(), event.remaining(), StandardCharsets.UTF_16);
+                       final String[] payloadComponents = test.split("---");
+                       if (payloadComponents.length < 2) {
+                           continue;
                        }
+                       final String txnId = payloadComponents[0];
+                       final long txnWriteTs = Long.parseLong(payloadComponents[1]);
+                       final long readDurationMs = (eventInTxnReadTs - txnWriteTs) / (long) 1000000;
+                       this.txnsWithEvents.compute(txnId, (k,v) -> {
+                           if (v == null) {
+                               v = new LinkedList<Long>();
+                           }
+                           v.add(readDurationMs);
+                           if (v.size() == 1000) {
+                               double summary = 0.0;
+                               for (Iterator<Long> i = v.iterator(); i.hasNext();) {
+                                   long currentTime = i.next();
+                                   summary += currentTime;
+                               }
+                               double average = (summary) / v.size();
+                               log.info("READTXN---ID---" + txnId + "---AVG---" + average);
+
+                           }
+                           return v;
+                       });
+//                       List<Long> readEventsInTxn = this.txnsWithEvents.putIfAbsent(txnId, Arrays.asList(readDurationMs));
+//                       if (readEventsInTxn != null) {
+//                           readEventsInTxn.add(txnWriteTs);
+//                           // TODO: make the value configurable
+//                           if (readEventsInTxn.size() == 1000) {
+//                               double summary = 0.0;
+//                               for (Iterator<Long> i = readEventsInTxn.iterator(); i.hasNext();) {
+//                                   long currentTime = i.next();
+//                                   summary += currentTime;
+//                               }
+//                               double average = (summary) / readEventsInTxn.size();
+//                               log.info("READTXN---ID---" + txnId + "---AVG---" + average);
+//
+//                           }
+//                       }
+//                       log.info("Transaction " + payloadComponents[0] + "---" + readDurationMs);
                        byte[] payload = new byte[event.remaining()];
-                       event.get(payload);
+//                       String payloadStr = new String(payload, StandardCharsets.UTF_16);
+//                       event.get(payload);
+
                        consumerCallback.messageReceived(payload, eventTimestamp);
                    }
                } catch (ReinitializationRequiredException e) {
