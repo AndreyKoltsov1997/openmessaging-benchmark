@@ -31,6 +31,7 @@ import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.StreamManager;
+import io.pravega.client.stream.RetentionPolicy;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.StreamConfiguration;
 import org.apache.bookkeeper.stats.StatsLogger;
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -108,7 +110,8 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         } else {
             scalingPolicy = ScalingPolicy.fixed(partitions);
         }
-        streamManager.createStream(scopeName, topic, StreamConfiguration.builder().scalingPolicy(scalingPolicy).build());
+        RetentionPolicy retentionPolicy = RetentionPolicy.builder().retentionType(RetentionPolicy.RetentionType.TIME).retentionMax(1000000).build();
+        streamManager.createStream(scopeName, topic, StreamConfiguration.builder().scalingPolicy(scalingPolicy).retentionPolicy(retentionPolicy).build());
         return CompletableFuture.completedFuture(null);
     }
 
