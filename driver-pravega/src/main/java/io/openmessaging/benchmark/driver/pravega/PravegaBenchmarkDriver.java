@@ -110,8 +110,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         } else {
             scalingPolicy = ScalingPolicy.fixed(partitions);
         }
-        RetentionPolicy retentionPolicy = RetentionPolicy.builder().retentionType(RetentionPolicy.RetentionType.TIME).retentionMax(1000000).build();
-        streamManager.createStream(scopeName, topic, StreamConfiguration.builder().scalingPolicy(scalingPolicy).retentionPolicy(retentionPolicy).build());
+        streamManager.createStream(scopeName, topic, StreamConfiguration.builder().scalingPolicy(scalingPolicy).retentionPolicy(RetentionPolicy.byTime(Duration.ofDays(100L))).build());
         return CompletableFuture.completedFuture(null);
     }
 
