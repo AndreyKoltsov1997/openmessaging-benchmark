@@ -46,6 +46,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     private Transaction<ByteBuffer> transaction;
     private final int eventsPerTransaction;
     private int eventCount = 0;
+    private int txnCount = 0;
     private ByteBuffer timestampAndPayload;
     // -- Additional measurements
     private long noneToOpenStartEpoch;
@@ -134,17 +135,21 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 // beginTxn() is Synchronous => do not wait for status OPEN implicitly
                 this.noneToOpenEndEpoch = System.nanoTime();
             }
-            if (includeTimestampInEvent) {
-                if (timestampAndPayload == null || timestampAndPayload.limit() != Long.BYTES + payload.length) {
-                    timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
+            final boolean emptyTxnRequested = (eventsPerTransaction == 0);
+            if (!emptyTxnRequested) {
+                if (includeTimestampInEvent) {
+                    if (timestampAndPayload == null || timestampAndPayload.limit() != Long.BYTES + payload.length) {
+                        timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
+                    } else {
+                        timestampAndPayload.position(0);
+                    }
+                    timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
+                    writeEvent(key, timestampAndPayload);
                 } else {
-                    timestampAndPayload.position(0);
+                    writeEvent(key, ByteBuffer.wrap(payload));
                 }
-                timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
-                writeEvent(key, timestampAndPayload);
-            } else {
-                writeEvent(key, ByteBuffer.wrap(payload));
             }
+
             if (++eventCount >= eventsPerTransaction) {
                 eventCount = 0;
                 final long commitProcessStartEpoch = System.nanoTime();
@@ -154,10 +159,11 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 final long beginCommitDurMs = (this.noneToOpenEndEpoch - this.noneToOpenStartEpoch) / (long) 1000000;
                 final long writeExclusiveDurMs = (commitProcessStartEpoch - this.noneToOpenEndEpoch) / (long) 1000000;
                 final long commitExclusiveDurMs = (commitFinishedEpoch - commitProcessStartEpoch) / (long) 1000000;
+                this.txnCount++;
                 log.info("---BEGINTXN---" + beginCommitDurMs +
                         "---WRITE---" + writeExclusiveDurMs + "---COMMITT---" +
-                        commitExclusiveDurMs + "---EPOCH---" + System.currentTimeMillis());
-                // this.executorService.submit(new PollingJob(this.noneToOpenStartEpoch, this.noneToOpenEndEpoch, commitProcessStartEpoch, commitFinishedEpoch, this.transaction));
+                        commitExclusiveDurMs + "---TXN---" + this.txnCount + "---EPOCH---" + System.currentTimeMillis());
+//                 this.executorService.submit(new PollingJob(this.noneToOpenStartEpoch, this.noneToOpenEndEpoch, commitProcessStartEpoch, commitFinishedEpoch, this.transaction));
 
                 transaction = null;
             }
